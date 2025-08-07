@@ -1,13 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from supabase import create_client, Client
+from fastapi.responses import FileResponse
 import os
+import subprocess
+import uuid
 
-# Inicializa o app FastAPI
 app = FastAPI()
 
-# Permite chamadas de fora (CORS)
+# Permitir chamadas externas (Lovable)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,29 +16,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Modelo de entrada
-class Item(BaseModel):
-    nome: str
-    preco: float
-    loja: str
-
-# Conecta com Supabase usando variáveis de ambiente
-url = os.environ.get("SUPABASE_URL")
-key = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
-
-# Rota de teste
 @app.get("/")
 def read_root():
-    return {"message": "Está funcionando com Supabase!"}
+    return {"message": "API Ativa e funcionando"}
 
-# Rota para salvar item no Supabase
-@app.post("/scraper")
-async def scrape(item: Item):
-    data = {
-        "nome": item.nome,
-        "preco": item.preco,
-        "loja": item.loja
-    }
-    result = supabase.table("produtos").insert(data).execute()
-    return {"message": "Dados salvos com sucesso no Supabase!"}
+@app.post("/upload-planilha")
+async def upload_planilha(file: UploadFile = File(...)):
+    # Salva arquivo temporariamente
+    input_filename = f"input_{uuid.uuid4().hex}.xlsx"
+    output_filename = f"output_{uuid.uuid4().hex}.xlsx"
+
+    with open(input_filename, "wb") as f:
+        f.write(await file.read())
+
+    # Executa o script com o arquivo salvo
+    try:
+        subprocess.run(
+            ["python", "amazon_scraper.py", "--input", input_filename, "--output", output_filename, "--headless"],
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        return {"error": "Erro ao executar o script", "detalhes": str(e)}
+
+    # Retorna o arquivo processado
+    return FileResponse(output_filename, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename="resultado.xlsx")
