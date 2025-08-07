@@ -1,4 +1,9 @@
 fastapi
 uvicorn
+pydantic
 supabase
+pandas
+openpyxl
+python-multipart
+
 
